@@ -46,6 +46,8 @@ button:disabled{cursor:default}
 .nav button{background:rgba(16,24,51,.85);border:1px solid var(--line);border-radius:4px;padding:7px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .nav button:hover{color:var(--ink);border-color:var(--muted)}
 .nav button.lock::after{content:" · locked";opacity:.6}
+.nav button.first{border-color:var(--amber);color:var(--ink)}
+.nav button.first::after{content:" · start here";color:var(--amber)}
 .help{position:fixed;right:16px;top:84px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;line-height:1.6;pointer-events:none}
 .help kbd{font-family:var(--mono);border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--ink)}
 .dock{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);display:none;align-items:center;gap:12px;background:var(--hull);border:1px solid var(--amber);border-radius:6px;padding:10px 14px;box-shadow:0 0 30px rgba(255,184,74,.2)}
@@ -70,6 +72,17 @@ h3{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.02e
 .sheet-body{padding:20px 24px 26px}
 .lede{color:var(--muted);max-width:62ch;line-height:1.55;margin:8px 0 0}
 .tag-sign{display:inline-block;background:var(--sign);border:2px solid #fff;border-radius:6px;padding:2px 10px;font-family:var(--display);font-weight:800;letter-spacing:.04em;font-size:14px;text-transform:uppercase}
+
+/* contract types world: client tags and at-a-glance table */
+.tagrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag-doc{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid #8f79e0;color:#d9d0ff;background:rgba(111,85,201,.18);border-radius:3px;padding:3px 8px}
+.glance-wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:6px;background:rgba(7,11,24,.6)}
+.glance{border-collapse:collapse;width:100%;min-width:640px;font-size:14px;line-height:1.4}
+.glance caption{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:10px 12px 6px}
+.glance th,.glance td{text-align:left;padding:8px 12px;border-top:1px solid var(--line);vertical-align:top}
+.glance thead th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:400;border-top:0}
+.glance tbody th{font-weight:700;color:var(--ink);white-space:nowrap}
+.glance tbody th small{display:block;font-weight:400;font-size:11px;color:var(--muted);white-space:normal}
 
 /* district cards with tier chips */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
@@ -177,6 +190,14 @@ h3{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.02e
 <script src="content-core.js"></script>
 <script src="content-program.js"></script>
 <script src="content-roads.js"></script>
+<script src="command-vma.js"></script>
+<script src="command-cvs.js"></script>
+<script src="command-risk.js"></script>
+<script src="command-cost.js"></script>
+<script src="contracts-dbb.js"></script>
+<script src="contracts-cmgc.js"></script>
+<script src="contracts-db.js"></script>
+<script src="contracts-pdb.js"></script>
 <script src="content-worlds.js"></script>
 <script>
 /* ============================================================
@@ -258,6 +279,26 @@ function P(w){const m=Math.min(W,H);return{x:w.x*W,y:Math.max(90,w.y*H),r:Math.m
 function hexA(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16},${n>>8&255},${n&255},${a})`}
 function mix(h,t,k){const n=parseInt(h.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;r=Math.round(r+(t-r)*k);g=Math.round(g+(t-g)*k);b=Math.round(b+(t-b)*k);return`rgb(${r},${g},${b})`}
 
+/* Contract Types planet: ruled page lines, a signature stroke and a seal; ring has one segment per delivery method, lit when that district has a cleared tier */
+function contractSurface(p){
+  cx.strokeStyle="rgba(255,255,255,.22)";cx.lineWidth=1.5;
+  [.9,.6,.8,.5,.7].forEach((k,i)=>{const y=p.y-p.r*.55+i*p.r*.2;cx.beginPath();cx.moveTo(p.x-p.r*.7,y);cx.lineTo(p.x-p.r*.7+p.r*1.4*k,y);cx.stroke()});
+  cx.strokeStyle="rgba(255,184,74,.9)";cx.lineWidth=2;
+  const sx=p.x-p.r*.62,sy=p.y+p.r*.62;cx.beginPath();cx.moveTo(sx,sy);
+  cx.bezierCurveTo(sx+p.r*.15,sy-p.r*.3,sx+p.r*.25,sy+p.r*.15,sx+p.r*.4,sy-p.r*.08);
+  cx.bezierCurveTo(sx+p.r*.5,sy-p.r*.22,sx+p.r*.55,sy+p.r*.1,sx+p.r*.75,sy-p.r*.04);cx.stroke();
+  const qx=p.x+p.r*.5,qy=p.y+p.r*.5;
+  cx.fillStyle="rgba(255,184,74,.92)";cx.beginPath();cx.arc(qx,qy,p.r*.17,0,7);cx.fill();
+  cx.strokeStyle="rgba(26,18,5,.55)";cx.lineWidth=1;cx.beginPath();cx.arc(qx,qy,p.r*.1,0,7);cx.stroke();
+}
+function contractRing(w,p,t){
+  const n=w.districts.length,rot=reduce?0:t*.00015,gap=.14;
+  cx.lineWidth=3;cx.lineCap="round";
+  w.districts.forEach((d,i)=>{const a0=rot+i/n*6.283+gap,a1=rot+(i+1)/n*6.283-gap;
+    cx.strokeStyle=highestCleared(d)?"rgba(255,184,74,.95)":"rgba(233,237,247,.4)";
+    cx.beginPath();cx.ellipse(p.x,p.y,p.r*1.7,p.r*.46,-.35,a0,a1);cx.stroke()});
+  cx.lineCap="butt";
+}
 function drawPlanet(w,t){
   const p=P(w);
   cx.save();
@@ -292,9 +333,11 @@ function drawPlanet(w,t){
       cx.strokeStyle="rgba(255,184,74,.7)";cx.beginPath();cx.ellipse(p.x,p.y,p.r*1.1,p.r*.4,-.35,0,7);cx.stroke();
     }else{
       cx.strokeStyle="rgba(255,255,255,.08)";cx.lineWidth=1;
+      if(w.id==="contracts")contractSurface(p);else
       for(let i=-3;i<=3;i++){cx.beginPath();cx.ellipse(p.x,p.y+i*p.r*.28,p.r,p.r*.12,0,0,7);cx.stroke()}
     }
     cx.restore();
+    if(w.id==="contracts")contractRing(w,p,t);
     if(w.ring){cx.strokeStyle="rgba(233,237,247,.35)";cx.lineWidth=1.5;cx.beginPath();cx.ellipse(p.x,p.y,p.r*1.55,p.r*.35,-.35,Math.PI*.05,Math.PI*1.95);cx.stroke()}
   }
   cx.textAlign="center";
@@ -305,6 +348,11 @@ function drawPlanet(w,t){
   let sub="LOCKED · IN DEVELOPMENT";
   if(!w.locked){let c=0,n=0;w.districts.forEach(d=>TIERS.forEach(([tt])=>{if(d.tiers[tt]){n++;if(S.stars[K(d,tt)])c++}}));sub=c+"/"+n+" TIERS CLEARED"}
   cx.fillText(sub,p.x,p.y+p.r+60);
+  if(w.first&&!w.districts.some(d=>highestCleared(d))){
+    const k=reduce?.5:(t%2400)/2400;
+    cx.strokeStyle="rgba(255,184,74,"+(.7*(1-k)).toFixed(2)+")";cx.lineWidth=2;cx.beginPath();cx.arc(p.x,p.y,p.r*(1.15+k*1.1),0,7);cx.stroke();
+    cx.fillStyle="#ffb84a";cx.font="600 11px 'Overpass Mono', monospace";cx.fillText("START HERE",p.x,p.y+p.r+76);
+  }
   cx.restore();
 }
 function drawShip(){
@@ -371,7 +419,7 @@ cv.addEventListener("pointerdown",e=>{
 });
 document.getElementById("dockBtn").onclick=()=>near&&openWorld(WORLDS.indexOf(near));
 const nav=document.getElementById("nav");
-WORLDS.forEach(w=>{const b=document.createElement("button");b.type="button";b.textContent=w.name;if(w.locked)b.className="lock";b.onclick=()=>openWorld(WORLDS.indexOf(w));nav.appendChild(b)});
+WORLDS.forEach(w=>{const b=document.createElement("button");b.type="button";b.textContent=w.name;if(w.locked)b.className="lock";if(w.first)b.className="first";b.onclick=()=>openWorld(WORLDS.indexOf(w));nav.appendChild(b)});
 
 /* ============================================================
    PANELS
@@ -401,9 +449,9 @@ function openWorld(i){
     focusFirst(".close");return;
   }
   show(`<div class="sheet-head"><div class="sign"><div class="eyebrow">${w.kind==="station"?"Station":"World"}</div>
-    <h1 id="panelTitle">${w.name}</h1>${w.id==="dot"?'<div style="margin-top:8px"><span class="tag-sign">Caltrans</span></div>':""}
+    <h1 id="panelTitle">${w.name}</h1>${w.id==="dot"?'<div style="margin-top:8px"><span class="tag-sign">Caltrans</span></div>':w.tags?'<div class="tagrow">'+w.tags.map(x=>'<span class="tag-doc">'+x+'</span>').join("")+'</div>':""}
     <p class="lede">${w.intro}</p></div><button class="close" onclick="closePanel()">Back to space</button></div>
-    <div class="sheet-body"><div class="grid">${w.districts.map((d,j)=>{
+    <div class="sheet-body">${w.guide||""}<div class="grid">${w.districts.map((d,j)=>{
       const t=currentTier(d),T=d.tiers[t],r=(S.read[K(d,t)]||[]).length;
       return`<div class="card"><div class="chips">${TIERS.map(([tt,lab])=>chipHtml(i,j,d,tt,lab)).join("")}</div>
       <button class="card-main" type="button" onclick="openDistrict(${i},${j},'${t}')"><span class="glyph">${d.glyph}</span><h3>${d.name}</h3><p>${d.blurb}</p></button>
